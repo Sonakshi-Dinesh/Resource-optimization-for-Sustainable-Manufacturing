@@ -1,0 +1,301 @@
+---
+title: "Implementation"
+author: "Team Q"
+date: "2024-10-09"
+output: html_document
+---
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(caret)
+library(randomForest)
+library(e1071)
+library(corrplot)
+```
+```{r}
+# Loading the dataset and printing top 5 rows 
+data <- read.csv("/Users/sonakshi_dinesh/Desktop/Semester 7/Foundation of data analytics/J Component/Dataset.csv")
+head(data,5)
+```
+```{r}
+# Data Preprocessing 
+#1 Convert categorical variables to factors 
+data$WeekStatus <- as.factor(data$WeekStatus)
+data$Day_of_week <- as.factor(data$Day_of_week)
+data$Load_Type <- as.factor(data$Load_Type)
+```
+```{r}
+#2 Check structure of the data to ensure correct data types
+str(data)
+```
+```{r}
+#3 Handle missing values 
+data <- na.omit(data)
+```
+```{r}
+#4 Check for and remove constant columns
+constant_columns <- sapply(data, function(x) length(unique(x)) == 1)
+data <- data[, !constant_columns]
+```
+```{r}
+# Exploratory Data Analysis 
+#1 Distribution of numeric variables 
+ggplot(data, aes(x = Usage_kWh)) + 
+  geom_histogram(bins = 30, fill = "blue", color = "white") +
+  theme_minimal() + 
+  labs(title = "Distribution of Usage_kWh", x = "Usage_kWh", y = "Frequency")
+```
+```{r}
+#2 Boxplot of Consumption 
+ggplot(data, aes(y = Usage_kWh)) + 
+  geom_boxplot(fill = "lightblue") +
+  theme_minimal() +
+  labs(title = "Boxplot of Usage_kWh", y = "Usage_kWh")
+```
+```{r}
+#3 Correlation matrix for numerical variables
+numeric_cols <- data %>%
+  select(Usage_kWh, Lagging_Current_Reactive.Power_kVarh, Leading_Current_Reactive_Power_kVarh,
+         CO2.tCO2., Lagging_Current_Power_Factor, Leading_Current_Power_Factor, NSM)
+corr_matrix <- cor(numeric_cols, use = "complete.obs")
+corrplot(corr_matrix, method = "color", type = "upper", tl.col = "black", tl.srt = 80)
+```
+```{r}
+#4 Scatter plot for Consumption vs CO2
+ggplot(data, aes(x = CO2.tCO2., y = Usage_kWh)) +
+  geom_point(color = "darkblue") +
+  theme_minimal() +
+  labs(title = "Usage_kWh vs CO2", x = "CO2 (tCO2)", y = "Usage_kWh")
+```
+```{r}
+#5 Boxplot of Consumption by Week Status
+ggplot(data, aes(x = WeekStatus, y = Usage_kWh)) + 
+  geom_boxplot(fill = "lightcoral") + 
+  theme_minimal() +
+  labs(title = "Usage_kWh by WeekStatus", x = "WeekStatus", y = "Usage_kWh")
+```
+```{r}
+# Model Building and Evaluation - Machine Learning
+#1 Split the data into training and testing sets 
+set.seed(123) 
+trainIndex <- createDataPartition(data$Usage_kWh, p = 0.7, list = FALSE)
+dataTrain <- data[trainIndex, ]
+dataTest <- data[-trainIndex, ]
+```
+```{r}
+#2 Model Building and Evaluation
+#a Linear Regression 
+lm_model <- lm(Usage_kWh ~ Lagging_Current_Reactive.Power_kVarh + Leading_Current_Reactive_Power_kVarh +
+                 CO2.tCO2. + Lagging_Current_Power_Factor + Leading_Current_Power_Factor +
+                 NSM + WeekStatus + Day_of_week + Load_Type, data = dataTrain)
+
+lm_predictions <- predict(lm_model, dataTest)
+lm_mae <- mean(abs(lm_predictions - dataTest$Usage_kWh))
+lm_rmse <- sqrt(mean((lm_predictions - dataTest$Usage_kWh)^2))
+lm_r2 <- 1 - sum((lm_predictions - dataTest$Usage_kWh)^2) / sum((dataTest$Usage_kWh - mean(dataTest$Usage_kWh))^2)
+print(lm_r2)
+print(lm_mae)
+print(lm_rmse)
+```
+```{r}
+#b Support Vector Machine
+svm_model <- svm(Usage_kWh ~ Lagging_Current_Reactive.Power_kVarh + Leading_Current_Reactive_Power_kVarh +
+                   CO2.tCO2. + Lagging_Current_Power_Factor + Leading_Current_Power_Factor +
+                   NSM + WeekStatus + Day_of_week + Load_Type, data = dataTrain)
+svm_predictions <- predict(svm_model, dataTest)
+svm_mae <- mean(abs(svm_predictions - dataTest$Usage_kWh))
+svm_rmse <- sqrt(mean((svm_predictions - dataTest$Usage_kWh)^2))
+svm_r2 <- 1 - sum((svm_predictions - dataTest$Usage_kWh)^2) / sum((dataTest$Usage_kWh - mean(dataTest$Usage_kWh))^2)
+print(svm_r2)
+print(svm_mae)
+print(svm_rmse)
+```
+```{r}
+#c Random Forest 
+rf_model <- randomForest(Usage_kWh ~ Lagging_Current_Reactive.Power_kVarh + Leading_Current_Reactive_Power_kVarh +
+                           CO2.tCO2. + Lagging_Current_Power_Factor + Leading_Current_Power_Factor +
+                           NSM + WeekStatus + Day_of_week + Load_Type, data = dataTrain)
+rf_predictions <- predict(rf_model, dataTest)
+rf_mae <- mean(abs(rf_predictions - dataTest$Usage_kWh))
+rf_rmse <- sqrt(mean((rf_predictions - dataTest$Usage_kWh)^2))
+rf_r2 <- 1 - sum((rf_predictions - dataTest$Usage_kWh)^2) / sum((dataTest$Usage_kWh - mean(dataTest$Usage_kWh))^2)
+print(rf_r2)
+print(rf_mae)
+print(rf_rmse)
+```
+```{r}
+# Results as data frame
+results <- data.frame(
+  Model = c("Linear Regression", "SVM", "Random Forest"),
+  R2=c(lm_r2, svm_r2, rf_r2),
+  MAE = c(lm_mae, svm_mae, rf_mae),
+  RMSE = c(lm_rmse, svm_rmse, rf_rmse)
+)
+
+print(results)
+```
+```{r}
+# Visualisation of results 
+results_long <- results %>%
+  pivot_longer(cols = c(R2, MAE, RMSE), names_to = "Metric", values_to = "Value")
+ggplot(results_long, aes(x = Model, y = Value, color = Metric, group = Metric)) +
+  geom_line(size = 1.2) +      # Line for each metric
+  geom_point(size = 3) +       # Add points to lines
+  labs(title = "Model Performance Metrics", x = "Model", y = "Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+```
+```{r}
+# Prescriptive Analytics 
+library(lpSolve)
+coefficients <- coef(lm_model)
+coefficients
+```
+```{r}
+# Our aim is to optimize the consumption with the help of a linear regression model
+objective <- coefficients[c("Lagging_Current_Reactive.Power_kVarh", "Leading_Current_Reactive_Power_kVarh")]
+```
+```{r}
+# Define Constraints 
+constraints <- matrix(c(1, 0,   # Constraint for Lagging_Current_Reactive.Power_kVarh
+                        0, 1),  # Constraint for Leading_Current_Reactive_Power_kVarh
+                      nrow = 2, byrow = TRUE)
+rhs <- c(0, 0)
+direction <- c(">=", ">=")
+```
+```{r}
+# Solve LPP
+lp_solution <- lp(direction = "min",
+                  objective.in = objective,
+                  const.mat = constraints,
+                  const.dir = direction,
+                  const.rhs = rhs)
+lp_solution
+```
+```{r}
+# Extract optimal results 
+optimal_values <- lp_solution$solution
+print(paste("Optimal Lagging_Current_Reactive.Power_kVarh:", optimal_values[1]))
+print(paste("Optimal Leading_Current_Reactive_Power_kVarh:", optimal_values[2]))
+```
+
+
+
+
+```{r}
+#Stochastic Programming 
+library(ROI)
+library(ROI.plugin.quadprog)
+library(ROI.plugin.symphony)
+library(dplyr)
+library(ggplot2)
+
+```
+
+```{r}
+# Define the random variables as distributions or scenarios
+set.seed(123)
+
+# Simulate scenarios for Lagging and Leading Reactive Power
+n_scenarios <- 100  # Number of scenarios
+
+scenarios <- data.frame(
+  Lagging_Current_Reactive.Power_kVarh = rnorm(n_scenarios, mean = 200, sd = 50),
+  Leading_Current_Reactive_Power_kVarh = rnorm(n_scenarios, mean = 100, sd = 30)
+)
+
+# Assume coefficients derived from Linear Regression
+objective_coefficients <- coefficients[c("Lagging_Current_Reactive.Power_kVarh", 
+                                         "Leading_Current_Reactive_Power_kVarh")]
+
+# Define the objective for each scenario
+scenarios <- scenarios %>%
+  mutate(Scenario_Objective = 
+           Lagging_Current_Reactive.Power_kVarh * objective_coefficients[1] +
+           Leading_Current_Reactive_Power_kVarh * objective_coefficients[2])
+
+```
+
+```{r}
+# Define the constraint matrix
+constraints <- matrix(c(1, 0, 
+                        0, 1), 
+                      nrow = 2, byrow = TRUE)
+
+# Define the right-hand side and constraint directions
+rhs <- c(0, 0)
+directions <- c(">=", ">=")
+
+# Solve for each scenario
+results <- data.frame(Scenario = 1:n_scenarios, Optimal_Lagging = NA, Optimal_Leading = NA)
+
+for (i in 1:n_scenarios) {
+  # Current scenario
+  current_obj <- c(scenarios$Lagging_Current_Reactive.Power_kVarh[i], 
+                   scenarios$Leading_Current_Reactive_Power_kVarh[i])
+  
+  # Solve using ROI for each scenario
+  sol <- ROI_solve(
+    OP(objective = current_obj, 
+       constraints = L_constraint(L = constraints, dir = directions, rhs = rhs),
+       maximum = FALSE)
+  )
+  
+  # Store optimal values
+  results$Optimal_Lagging[i] <- sol$solution[1]
+  results$Optimal_Leading[i] <- sol$solution[2]
+}
+
+# View results
+print(head(results))
+
+```
+
+```{r}
+# Visualize Optimal Reactive Powers across Scenarios
+ggplot(results, aes(x = Scenario)) +
+  geom_line(aes(y = Optimal_Lagging, color = "Optimal Lagging"), size = 1) +
+  geom_line(aes(y = Optimal_Leading, color = "Optimal Leading"), size = 1) +
+  labs(title = "Stochastic Optimization: Optimal Reactive Powers", 
+       x = "Scenario", y = "Optimal Value") +
+  theme_minimal() +
+  scale_color_manual(name = "Variables", values = c("Optimal Lagging" = "blue", 
+                                                    "Optimal Leading" = "green"))
+
+```
+
+```{r}
+#FUZZY Logic
+library(sets)
+
+# Define the universe of discourse for input and output variables
+sets_options("universe", seq(0, 100, by = 1))
+
+# Define fuzzy sets for input variables
+Lagging <- fuzzy_partition(varnames = c(low = 0, medium = 50, high = 100), FUN = fuzzy_cone, radius = 20)
+Leading <- fuzzy_partition(varnames = c(low = 0, medium = 50, high = 100), FUN = fuzzy_cone, radius = 20)
+
+# Define fuzzy sets for output variable (Optimal Settings)
+Optimal <- fuzzy_partition(varnames = c(low = 0, medium = 50, high = 100), FUN = fuzzy_cone, radius = 20)
+
+# Define a fuzzy system
+rules <- set(
+  fuzzy_rule(Lagging %is% high && Leading %is% low, Optimal %is% medium),
+  fuzzy_rule(Lagging %is% low && Leading %is% medium, Optimal %is% low),
+  fuzzy_rule(Lagging %is% medium && Leading %is% medium, Optimal %is% high)
+)
+
+system <- fuzzy_system(variables = set(Lagging = Lagging, Leading = Leading, Optimal = Optimal), rules = rules)
+
+# Simulate the fuzzy system for given inputs
+result <- fuzzy_inference(system, list(Lagging = 70, Leading = 30))
+plot(result)
+
+# Defuzzify the results for final output
+defuzzified <- gset_defuzzify(result, "centroid")
+print(defuzzified)
+```
+
+  
